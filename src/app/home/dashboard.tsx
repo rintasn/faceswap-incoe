@@ -24,6 +24,8 @@ const FaceSwapComponent = () => {
   const [targetUsed, setTargetUsed] = useState<string>('');
   const [showCamera, setShowCamera] = useState<boolean>(false);
   const [cameraMode, setCameraMode] = useState<string>('user'); // 'user' untuk depan, 'environment' untuk belakang
+  const [showTemplate, setShowTemplate] = useState<boolean>(false);
+  const [currentTemplate, setCurrentTemplate] = useState<string>('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -141,6 +143,24 @@ const FaceSwapComponent = () => {
     setShowCamera(false);
   };
 
+  const handleTargetTypeChange = (type: string) => {
+    setTargetType(type);
+    if (type === 'default') {
+      setShowTemplate(false);
+      setCurrentTemplate('');
+    } else {
+      setShowTemplate(true);
+      // Set the correct template based on target type
+      if (type === 'female') {
+        setCurrentTemplate('/assets/AI_CBI_Female.png');
+      } else if (type === 'male') {
+        setCurrentTemplate('/assets/AI_CBI_Male.png');
+      } else if (type === 'muslimah') {
+        setCurrentTemplate('/assets/AI_CBI_Muslimah.png');
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedFile) {
       setError('Silakan pilih gambar terlebih dahulu');
@@ -193,6 +213,8 @@ const FaceSwapComponent = () => {
     setFaceCount(0);
     setTargetType('default');
     setTargetUsed('');
+    setShowTemplate(false);
+    setCurrentTemplate('');
   };
 
   return (
@@ -355,7 +377,7 @@ const FaceSwapComponent = () => {
                       name="targetType" 
                       value="default" 
                       checked={targetType === 'default'}
-                      onChange={() => setTargetType('default')}
+                      onChange={() => handleTargetTypeChange('default')}
                       className="sr-only"
                     />
                     <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mb-2">
@@ -372,7 +394,7 @@ const FaceSwapComponent = () => {
                       name="targetType" 
                       value="female" 
                       checked={targetType === 'female'}
-                      onChange={() => setTargetType('female')}
+                      onChange={() => handleTargetTypeChange('female')}
                       className="sr-only"
                     />
                     <div className="w-12 h-12 rounded-full bg-purple-600/30 flex items-center justify-center mb-2">
@@ -389,7 +411,7 @@ const FaceSwapComponent = () => {
                       name="targetType" 
                       value="male" 
                       checked={targetType === 'male'}
-                      onChange={() => setTargetType('male')}
+                      onChange={() => handleTargetTypeChange('male')}
                       className="sr-only"
                     />
                     <div className="w-12 h-12 rounded-full bg-blue-600/30 flex items-center justify-center mb-2">
@@ -406,7 +428,7 @@ const FaceSwapComponent = () => {
                       name="targetType" 
                       value="muslimah" 
                       checked={targetType === 'muslimah'}
-                      onChange={() => setTargetType('muslimah')}
+                      onChange={() => handleTargetTypeChange('muslimah')}
                       className="sr-only"
                     />
                     <div className="w-12 h-12 rounded-full bg-green-600/30 flex items-center justify-center mb-2">
@@ -417,6 +439,28 @@ const FaceSwapComponent = () => {
                 </div>
                 <p className="text-xs text-gray-500 mt-3">
                   *Style selection will only apply when a single face is detected
+                </p>
+              </motion.div>
+            )}
+
+            {/* Template Preview Section */}
+            {showTemplate && !showCamera && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gray-800 rounded-xl p-6"
+              >
+                <h2 className="text-xl font-semibold mb-4 flex items-center">
+                  <ImageIcon className="w-5 h-5 mr-2 text-purple-400" />
+                  Template Preview
+                </h2>
+                <img
+                  src={currentTemplate}
+                  alt="Template Preview"
+                  className="w-full rounded-lg shadow-lg"
+                />
+                <p className="text-xs text-gray-400 mt-3 text-center">
+                  This is how your face will be styled
                 </p>
               </motion.div>
             )}
