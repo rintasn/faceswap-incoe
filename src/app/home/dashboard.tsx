@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, ChangeEvent } from 'react';
-import { Upload, Camera, Sparkles, Image as ImageIcon, Download, RefreshCw, User, Users } from 'lucide-react';
+import React, { useState, ChangeEvent, useRef } from 'react';
+import { Upload, Camera, Sparkles, Image as ImageIcon, Download, RefreshCw, User, Users, History } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { motion } from 'framer-motion';
+import Link from 'next/link'
 
 interface APIResponse {
   result_url: string;
@@ -21,6 +22,9 @@ const FaceSwapComponent = () => {
   const [faceCount, setFaceCount] = useState<number>(0);
   const [targetType, setTargetType] = useState<string>('default');
   const [targetUsed, setTargetUsed] = useState<string>('');
+  const [showCamera, setShowCamera] = useState<boolean>(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -40,6 +44,68 @@ const FaceSwapComponent = () => {
         setError('Mohon upload file gambar yang valid (JPG, PNG)');
       }
     }
+  };
+
+  const startCamera = async () => {
+    setShowCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      setError('Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.');
+      setShowCamera(false);
+    }
+  };
+
+  const captureImage = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Set canvas size to match video dimensions
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Draw current video frame to canvas
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Convert canvas to file
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
+          setSelectedFile(file);
+          
+          // Create preview
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result;
+            if (typeof result === 'string') {
+              setPreview(result);
+            }
+          };
+          reader.readAsDataURL(file);
+          
+          // Stop camera stream
+          stopCamera();
+        }
+      }, "image/jpeg");
+    }
+  };
+  
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      const tracks = stream.getTracks();
+      
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    
+    setShowCamera(false);
   };
 
   const handleSubmit = async () => {
@@ -99,12 +165,21 @@ const FaceSwapComponent = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white py-12">
       <div className="max-w-6xl mx-auto p-6">
-        {/* Header Section */}
+        {/* Header Section with History Link */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="text-center mb-8"
         >
+          <div className="flex justify-end mb-4">
+            <Link 
+              href="/history-generate" 
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-blue-400 transition-colors"
+            >
+              <History className="w-5 h-5" />
+              <span>History</span>
+            </Link>
+          </div>
           <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
             AI Face Swap Generator
           </h1>
@@ -118,32 +193,90 @@ const FaceSwapComponent = () => {
             animate={{ opacity: 1, x: 0 }}
             className="space-y-6"
           >
-            <div className="bg-gray-800 rounded-xl p-8 border border-gray-700 hover:border-blue-500 transition-all">
-              <input
-                type="file"
-                onChange={handleFileSelect}
-                accept="image/*"
-                className="hidden"
-                id="file-upload"
-              />
-              <label
-                htmlFor="file-upload"
-                className="flex flex-col items-center cursor-pointer space-y-4"
+            {/* Camera stream (conditionally rendered) */}
+            {showCamera && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gray-800 rounded-xl p-6 border border-gray-700"
               >
-                <div className="w-20 h-20 rounded-full bg-blue-600/20 flex items-center justify-center">
-                  <Upload className="w-8 h-8 text-blue-400" />
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold flex items-center">
+                    <Camera className="w-5 h-5 mr-2 text-blue-400" />
+                    Camera
+                  </h2>
+                  <button 
+                    onClick={captureImage}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Capture
+                  </button>
                 </div>
-                <span className="text-lg font-semibold text-gray-300">
-                  Upload Your Image
-                </span>
-                <span className="text-sm text-gray-500">
+                <video 
+                  ref={videoRef}
+                  autoPlay 
+                  playsInline 
+                  className="w-full rounded-lg"
+                />
+                <canvas ref={canvasRef} className="hidden" />
+                <button 
+                  onClick={stopCamera}
+                  className="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg w-full transition-colors"
+                >
+                  Close Camera
+                </button>
+              </motion.div>
+            )}
+
+            {/* Input options (Upload or Camera) - Only shown when camera is not active */}
+            {!showCamera && (
+              <div className="bg-gray-800 rounded-xl p-8 border border-gray-700 hover:border-blue-500 transition-all">
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Upload button */}
+                  <div>
+                    <input
+                      type="file"
+                      onChange={handleFileSelect}
+                      accept="image/*"
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className="flex flex-col items-center cursor-pointer space-y-4 h-full"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-blue-600/20 flex items-center justify-center">
+                        <Upload className="w-7 h-7 text-blue-400" />
+                      </div>
+                      <span className="text-lg font-semibold text-gray-300">
+                        Upload Image
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Camera button */}
+                  <div>
+                    <button
+                      onClick={startCamera}
+                      className="flex flex-col items-center cursor-pointer space-y-4 w-full h-full"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-purple-600/20 flex items-center justify-center">
+                        <Camera className="w-7 h-7 text-purple-400" />
+                      </div>
+                      <span className="text-lg font-semibold text-gray-300">
+                        Open Camera
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-center text-gray-500 mt-6">
                   Supports JPG, PNG (max 5 faces)
-                </span>
-              </label>
-            </div>
+                </p>
+              </div>
+            )}
 
             {/* Preview Section */}
-            {preview && (
+            {preview && !showCamera && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -162,7 +295,7 @@ const FaceSwapComponent = () => {
             )}
             
             {/* Target Selection (Only shown when preview is available) */}
-            {preview && (
+            {preview && !showCamera && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -254,27 +387,29 @@ const FaceSwapComponent = () => {
             animate={{ opacity: 1, x: 0 }}
             className="space-y-6"
           >
-            {/* Generate Button */}
-            <button
-              onClick={handleSubmit}
-              disabled={!selectedFile || loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-xl
-                       font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50
-                       disabled:cursor-not-allowed transition-all duration-300
-                       flex items-center justify-center gap-3 shadow-lg"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw className="w-6 h-6 animate-spin" />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-6 h-6" />
-                  <span>Generate Face Swap</span>
-                </>
-              )}
-            </button>
+            {/* Generate Button - Only show when not in camera mode and an image is selected */}
+            {!showCamera && selectedFile && (
+              <button
+                onClick={handleSubmit}
+                disabled={!selectedFile || loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-xl
+                        font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50
+                        disabled:cursor-not-allowed transition-all duration-300
+                        flex items-center justify-center gap-3 shadow-lg"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-6 h-6" />
+                    <span>Generate Face Swap</span>
+                  </>
+                )}
+              </button>
+            )}
 
             {/* Result Display */}
             {result && (
