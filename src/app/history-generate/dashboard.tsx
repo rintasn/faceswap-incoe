@@ -51,6 +51,13 @@ const FaceSwapComponent = () => {
     document.body.removeChild(link);
   };
 
+  // Function to adjust time by subtracting 7 hours
+  const adjustTimeZone = (dateString: string): string => {
+    const date = new Date(dateString);
+    date.setHours(date.getHours() - 7);
+    return date.toLocaleString();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white py-12 flex flex-col">
       <div className="container mx-auto px-4">
@@ -124,7 +131,7 @@ const FaceSwapComponent = () => {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-gray-400 text-sm">
-                        {new Date(image.CreatedAt).toLocaleString()}
+                        {adjustTimeZone(image.CreatedAt)}
                       </p>
                     </div>
                     <button
