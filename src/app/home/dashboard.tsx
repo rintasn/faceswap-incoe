@@ -23,6 +23,7 @@ const FaceSwapComponent = () => {
   const [targetType, setTargetType] = useState<string>('default');
   const [targetUsed, setTargetUsed] = useState<string>('');
   const [showCamera, setShowCamera] = useState<boolean>(false);
+  const [cameraMode, setCameraMode] = useState<string>('user'); // 'user' untuk depan, 'environment' untuk belakang
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -49,7 +50,11 @@ const FaceSwapComponent = () => {
   const startCamera = async () => {
     setShowCamera(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: cameraMode 
+        } 
+      });
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -57,6 +62,34 @@ const FaceSwapComponent = () => {
     } catch (err) {
       setError('Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.');
       setShowCamera(false);
+    }
+  };
+
+  const toggleCamera = async () => {
+    // Hentikan stream kamera yang sedang berjalan
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      const tracks = stream.getTracks();
+      tracks.forEach(track => track.stop());
+    }
+    
+    // Ubah mode kamera
+    const newMode = cameraMode === 'user' ? 'environment' : 'user';
+    setCameraMode(newMode);
+    
+    // Mulai ulang kamera dengan mode baru
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: newMode 
+        } 
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      setError('Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.');
     }
   };
 
@@ -205,12 +238,20 @@ const FaceSwapComponent = () => {
                     <Camera className="w-5 h-5 mr-2 text-blue-400" />
                     Camera
                   </h2>
-                  <button 
-                    onClick={captureImage}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    Capture
-                  </button>
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={toggleCamera}
+                      className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      {cameraMode === 'user' ? 'Kamera Belakang' : 'Kamera Depan'}
+                    </button>
+                    <button 
+                      onClick={captureImage}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Capture
+                    </button>
+                  </div>
                 </div>
                 <video 
                   ref={videoRef}
@@ -223,7 +264,7 @@ const FaceSwapComponent = () => {
                   onClick={stopCamera}
                   className="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg w-full transition-colors"
                 >
-                  Close Camera
+                  Tutup Kamera
                 </button>
               </motion.div>
             )}
