@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, ChangeEvent, useRef } from 'react';
-import { Upload, Camera, Sparkles, Image as ImageIcon, Download, RefreshCw, User, Users, History } from 'lucide-react';
+import { Upload, Camera, Sparkles, Image as ImageIcon, Download, RefreshCw, User, Users, History, FileUp } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { motion } from 'framer-motion';
 import Link from 'next/link'
@@ -15,7 +15,9 @@ interface APIResponse {
 
 const FaceSwapComponent = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedTargetFile, setSelectedTargetFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
+  const [targetPreview, setTargetPreview] = useState<string>('');
   const [result, setResult] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -26,6 +28,7 @@ const FaceSwapComponent = () => {
   const [cameraMode, setCameraMode] = useState<string>('user'); // 'user' untuk depan, 'environment' untuk belakang
   const [showTemplate, setShowTemplate] = useState<boolean>(false);
   const [currentTemplate, setCurrentTemplate] = useState<string>('');
+  const [useCustomTarget, setUseCustomTarget] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -47,6 +50,33 @@ const FaceSwapComponent = () => {
         setError('Mohon upload file gambar yang valid (JPG, PNG)');
       }
     }
+  };
+
+  const handleTargetFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.type.startsWith('image/')) {
+        setSelectedTargetFile(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result;
+          if (typeof result === 'string') {
+            setTargetPreview(result);
+          }
+        };
+        reader.readAsDataURL(file);
+        setUseCustomTarget(true);
+        setError('');
+      } else {
+        setError('Mohon upload file gambar yang valid (JPG, PNG)');
+      }
+    }
+  };
+
+  const removeTargetFile = () => {
+    setSelectedTargetFile(null);
+    setTargetPreview('');
+    setUseCustomTarget(false);
   };
 
   const startCamera = async () => {
@@ -148,16 +178,6 @@ const FaceSwapComponent = () => {
     if (type === 'default') {
       setShowTemplate(false);
       setCurrentTemplate('');
-    } else {
-      setShowTemplate(true);
-      // Set the correct template based on target type
-      if (type === 'female') {
-        setCurrentTemplate('/assets/AI_CBI_Female.png');
-      } else if (type === 'male') {
-        setCurrentTemplate('/assets/AI_CBI_Male.png');
-      } else if (type === 'muslimah') {
-        setCurrentTemplate('/assets/AI_CBI_Muslimah.png');
-      }
     }
   };
 
@@ -174,8 +194,11 @@ const FaceSwapComponent = () => {
       const formData = new FormData();
       formData.append('source_image', selectedFile);
       
-      // Hanya kirim target_type jika bukan default
-      if (targetType !== 'default') {
+      // Jika user menggunakan custom target
+      if (useCustomTarget && selectedTargetFile) {
+        formData.append('target_image', selectedTargetFile);
+      } else if (targetType !== 'default') {
+        // Jika user memilih template predefined
         formData.append('target_type', targetType);
       }
 
@@ -207,7 +230,9 @@ const FaceSwapComponent = () => {
 
   const resetForm = () => {
     setSelectedFile(null);
+    setSelectedTargetFile(null);
     setPreview('');
+    setTargetPreview('');
     setResult('');
     setError('');
     setFaceCount(0);
@@ -215,6 +240,7 @@ const FaceSwapComponent = () => {
     setTargetUsed('');
     setShowTemplate(false);
     setCurrentTemplate('');
+    setUseCustomTarget(false);
   };
 
   return (
@@ -267,12 +293,6 @@ const FaceSwapComponent = () => {
                     >
                       {cameraMode === 'user' ? 'Kamera Belakang' : 'Kamera Depan'}
                     </button>
-                    <button 
-                      onClick={captureImage}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Capture
-                    </button>
                   </div>
                 </div>
                 <video 
@@ -282,6 +302,12 @@ const FaceSwapComponent = () => {
                   className="w-full rounded-lg"
                 />
                 <canvas ref={canvasRef} className="hidden" />
+                <button 
+                  onClick={captureImage}
+                  className="bg-blue-600 pt-2 hover:bg-blue-700 text-white px-4 py-2 rounded-lg w-full transition-colors"
+                >
+                  Capture
+                </button>
                 <button 
                   onClick={stopCamera}
                   className="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg w-full transition-colors"
@@ -294,6 +320,7 @@ const FaceSwapComponent = () => {
             {/* Input options (Upload or Camera) - Only shown when camera is not active */}
             {!showCamera && (
               <div className="bg-gray-800 rounded-xl p-8 border border-gray-700 hover:border-blue-500 transition-all">
+                <h3 className="text-lg font-semibold mb-4 text-center">Source Image</h3>
                 <div className="grid grid-cols-2 gap-4">
                   {/* Upload button */}
                   <div>
@@ -357,7 +384,7 @@ const FaceSwapComponent = () => {
               </motion.div>
             )}
             
-            {/* Target Selection (Only shown when preview is available) */}
+            {/* Custom Target Upload Option */}
             {preview && !showCamera && (
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
@@ -365,103 +392,146 @@ const FaceSwapComponent = () => {
                 className="bg-gray-800 rounded-xl p-6"
               >
                 <h2 className="text-xl font-semibold mb-4 flex items-center">
-                  <User className="w-5 h-5 mr-2 text-blue-400" />
-                  Select Target Style (for single face)
+                  <FileUp className="w-5 h-5 mr-2 text-blue-400" />
+                  Target Image Options
                 </h2>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
-                    targetType === 'default' ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
-                  }`}>
-                    <input 
-                      type="radio" 
-                      name="targetType" 
-                      value="default" 
-                      checked={targetType === 'default'}
-                      onChange={() => handleTargetTypeChange('default')}
-                      className="sr-only"
-                    />
-                    <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mb-2">
-                      <Camera className="w-6 h-6 text-gray-300" />
-                    </div>
-                    <span className="text-sm font-medium">Default</span>
-                  </label>
+                
+                {/* Custom Target Upload */}
+                <div className="border border-gray-700 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">Custom Target Image</h3>
+                    <label className={`relative inline-flex items-center cursor-pointer ${useCustomTarget && !selectedTargetFile ? 'opacity-50' : ''}`}>
+                      <input 
+                        type="checkbox" 
+                        checked={useCustomTarget} 
+                        onChange={() => setUseCustomTarget(!useCustomTarget)} 
+                        className="sr-only peer"
+                        disabled={!selectedTargetFile && !useCustomTarget}
+                      />
+                      <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
                   
-                  <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
-                    targetType === 'female' ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
-                  }`}>
-                    <input 
-                      type="radio" 
-                      name="targetType" 
-                      value="female" 
-                      checked={targetType === 'female'}
-                      onChange={() => handleTargetTypeChange('female')}
-                      className="sr-only"
-                    />
-                    <div className="w-12 h-12 rounded-full bg-purple-600/30 flex items-center justify-center mb-2">
-                      <User className="w-6 h-6 text-pink-300" />
+                  {!targetPreview ? (
+                    <div className="border-dashed border-2 border-gray-600 rounded-lg p-4 text-center">
+                      <input
+                        type="file"
+                        onChange={handleTargetFileSelect}
+                        accept="image/*"
+                        className="hidden"
+                        id="target-upload"
+                      />
+                      <label
+                        htmlFor="target-upload"
+                        className="flex flex-col items-center cursor-pointer space-y-2"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
+                          <Upload className="w-5 h-5 text-gray-400" />
+                        </div>
+                        <span className="text-sm text-gray-400">Upload your own target template</span>
+                        <span className="text-xs text-gray-500">Must have same number of faces as source</span>
+                      </label>
                     </div>
-                    <span className="text-sm font-medium">Female</span>
-                  </label>
-                  
-                  <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
-                    targetType === 'male' ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
-                  }`}>
-                    <input 
-                      type="radio" 
-                      name="targetType" 
-                      value="male" 
-                      checked={targetType === 'male'}
-                      onChange={() => handleTargetTypeChange('male')}
-                      className="sr-only"
-                    />
-                    <div className="w-12 h-12 rounded-full bg-blue-600/30 flex items-center justify-center mb-2">
-                      <User className="w-6 h-6 text-blue-300" />
+                  ) : (
+                    <div className="relative">
+                      <img
+                        src={targetPreview}
+                        alt="Target Preview"
+                        className="w-full h-32 object-cover rounded-lg"
+                      />
+                      <button
+                        onClick={removeTargetFile}
+                        className="absolute top-2 right-2 bg-red-600 rounded-full p-1 text-white"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
-                    <span className="text-sm font-medium">Male</span>
-                  </label>
-                  
-                  <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
-                    targetType === 'muslimah' ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
-                  }`}>
-                    <input 
-                      type="radio" 
-                      name="targetType" 
-                      value="muslimah" 
-                      checked={targetType === 'muslimah'}
-                      onChange={() => handleTargetTypeChange('muslimah')}
-                      className="sr-only"
-                    />
-                    <div className="w-12 h-12 rounded-full bg-green-600/30 flex items-center justify-center mb-2">
-                      <User className="w-6 h-6 text-green-300" />
-                    </div>
-                    <span className="text-sm font-medium">Muslimah</span>
-                  </label>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-3">
-                  *Style selection will only apply when a single face is detected
-                </p>
-              </motion.div>
-            )}
-
-            {/* Template Preview Section */}
-            {showTemplate && !showCamera && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gray-800 rounded-xl p-6"
-              >
-                <h2 className="text-xl font-semibold mb-4 flex items-center">
-                  <ImageIcon className="w-5 h-5 mr-2 text-purple-400" />
-                  Template Preview
-                </h2>
-                <img
-                  src={currentTemplate}
-                  alt="Template Preview"
-                  className="w-full rounded-lg shadow-lg"
-                />
-                <p className="text-xs text-gray-400 mt-3 text-center">
-                  This is how your face will be styled
-                </p>
+                
+                {/* Predefined Target Options (only enabled if custom target is not used) */}
+                <div className={`${useCustomTarget ? 'opacity-50' : ''}`}>
+                  <h3 className="font-medium mb-2">Predefined Templates (single face only)</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
+                      targetType === 'default' && !useCustomTarget ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
+                    } ${useCustomTarget ? 'cursor-not-allowed' : ''}`}>
+                      <input 
+                        type="radio" 
+                        name="targetType" 
+                        value="default" 
+                        checked={targetType === 'default' && !useCustomTarget}
+                        onChange={() => !useCustomTarget && handleTargetTypeChange('default')}
+                        className="sr-only"
+                        disabled={useCustomTarget}
+                      />
+                      <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center mb-2">
+                        <Camera className="w-6 h-6 text-gray-300" />
+                      </div>
+                      <span className="text-sm font-medium">Default</span>
+                    </label>
+                    
+                    <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
+                      targetType === 'female' && !useCustomTarget ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
+                    } ${useCustomTarget ? 'cursor-not-allowed' : ''}`}>
+                      <input 
+                        type="radio" 
+                        name="targetType" 
+                        value="female" 
+                        checked={targetType === 'female' && !useCustomTarget}
+                        onChange={() => !useCustomTarget && handleTargetTypeChange('female')}
+                        className="sr-only"
+                        disabled={useCustomTarget}
+                      />
+                      <div className="w-12 h-12 rounded-full bg-purple-600/30 flex items-center justify-center mb-2">
+                        <User className="w-6 h-6 text-pink-300" />
+                      </div>
+                      <span className="text-sm font-medium">Female</span>
+                    </label>
+                    
+                    <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
+                      targetType === 'male' && !useCustomTarget ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
+                    } ${useCustomTarget ? 'cursor-not-allowed' : ''}`}>
+                      <input 
+                        type="radio" 
+                        name="targetType" 
+                        value="male" 
+                        checked={targetType === 'male' && !useCustomTarget}
+                        onChange={() => !useCustomTarget && handleTargetTypeChange('male')}
+                        className="sr-only"
+                        disabled={useCustomTarget}
+                      />
+                      <div className="w-12 h-12 rounded-full bg-blue-600/30 flex items-center justify-center mb-2">
+                        <User className="w-6 h-6 text-blue-300" />
+                      </div>
+                      <span className="text-sm font-medium">Male</span>
+                    </label>
+                    
+                    <label className={`border rounded-lg p-3 flex flex-col items-center cursor-pointer transition-all ${
+                      targetType === 'muslimah' && !useCustomTarget ? 'border-blue-500 bg-blue-900/20' : 'border-gray-700 hover:border-gray-500'
+                    } ${useCustomTarget ? 'cursor-not-allowed' : ''}`}>
+                      <input 
+                        type="radio" 
+                        name="targetType" 
+                        value="muslimah" 
+                        checked={targetType === 'muslimah' && !useCustomTarget}
+                        onChange={() => !useCustomTarget && handleTargetTypeChange('muslimah')}
+                        className="sr-only"
+                        disabled={useCustomTarget}
+                      />
+                      <div className="w-12 h-12 rounded-full bg-green-600/30 flex items-center justify-center mb-2">
+                        <User className="w-6 h-6 text-green-300" />
+                      </div>
+                      <span className="text-sm font-medium">Muslimah</span>
+                    </label>
+                  </div>
+                  
+                  <p className="text-xs text-gray-500 mt-3">
+                    *Style selection will only apply when a single face is detected
+                  </p>
+                </div>
               </motion.div>
             )}
           </motion.div>
@@ -514,7 +584,7 @@ const FaceSwapComponent = () => {
                     </span>
                     {targetUsed && (
                       <span className="text-xs text-gray-400">
-                        Using: {targetUsed}
+                        Using: {targetUsed === 'custom_upload' ? 'Your custom template' : targetUsed}
                       </span>
                     )}
                   </div>
