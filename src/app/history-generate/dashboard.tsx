@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ImageIcon, Download, RefreshCw, House } from 'lucide-react';
+import { Sparkles, ImageIcon, Download, RefreshCw, House, X } from 'lucide-react';
 import Link from 'next/link'
 
 // Define the FaceSwapData interface
@@ -13,6 +13,7 @@ const FaceSwapComponent = () => {
   const [images, setImages] = useState<FaceSwapData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const fetchFaceSwapData = async () => {
     setLoading(true);
@@ -42,7 +43,8 @@ const FaceSwapComponent = () => {
     fetchFaceSwapData();
   };
 
-  const downloadImage = (imageData: FaceSwapData, index: number) => {
+  const downloadImage = (e: React.MouseEvent, imageData: FaceSwapData, index: number) => {
+    e.stopPropagation(); // Prevent opening the popup when clicking download
     const link = document.createElement('a');
     link.href = imageData.ResultUrl;
     link.download = `faceswap-${imageData.CreatedAt.split('T')[0]}-${index}.jpg`;
@@ -57,6 +59,36 @@ const FaceSwapComponent = () => {
     date.setHours(date.getHours() - 7);
     return date.toLocaleString();
   };
+
+  // Handle click on image to show popup
+  const handleImageClick = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    // Prevent scrolling when popup is open
+    document.body.style.overflow = 'hidden';
+  };
+
+  // Close popup
+  const closePopup = () => {
+    setSelectedImage(null);
+    // Restore scrolling
+    document.body.style.overflow = 'auto';
+  };
+
+  // Handle keyboard events to close popup with Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedImage) {
+        closePopup();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      // Ensure scrolling is restored when component unmounts
+      document.body.style.overflow = 'auto';
+    };
+  }, [selectedImage]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white py-12 flex flex-col">
@@ -108,13 +140,19 @@ const FaceSwapComponent = () => {
         <div className="overflow-y-auto max-h-[calc(100vh-150px)] pr-2 pb-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {images.map((image, index) => (
-              <div key={index} className="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-                <div className="relative pt-[100%] bg-gray-700">
+              <div 
+                key={index} 
+                className="bg-gray-800 rounded-lg overflow-hidden shadow-lg"
+              >
+                <div 
+                  className="relative pt-[100%] bg-gray-700 cursor-pointer"
+                  onClick={() => image.ResultUrl && handleImageClick(image.ResultUrl)}
+                >
                   {image.ResultUrl ? (
                     <img 
                       src={image.ResultUrl} 
                       alt={`Face Swap ${index + 1}`}
-                      className="absolute top-0 left-0 w-full h-full object-cover"
+                      className="absolute top-0 left-0 w-full h-full object-cover transition-transform hover:scale-105"
                       onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                         const imgElement = e.currentTarget as HTMLImageElement;
                         imgElement.onerror = null;
@@ -135,7 +173,7 @@ const FaceSwapComponent = () => {
                       </p>
                     </div>
                     <button
-                      onClick={() => downloadImage(image, index)}
+                      onClick={(e) => downloadImage(e, image, index)}
                       className="bg-gray-700 hover:bg-gray-600 p-2 rounded-full transition-colors"
                       title="Download Image"
                     >
@@ -148,6 +186,48 @@ const FaceSwapComponent = () => {
           </div>
         </div>
       </div>
+
+      {/* Image Popup/Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+          onClick={closePopup}
+        >
+          <div 
+            className="relative max-w-4xl w-full max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking on content
+          >
+            <button 
+              onClick={closePopup}
+              className="absolute -top-12 right-0 bg-gray-800 hover:bg-gray-700 p-2 rounded-full text-white transition-colors z-10"
+            >
+              <X size={24} />
+            </button>
+            
+            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full h-full">
+              <img 
+                src={selectedImage} 
+                alt="Enlarged Face Swap"
+                className="max-h-[80vh] max-w-full mx-auto object-contain"
+              />
+              
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
+                <div className="flex justify-end">
+                  <a
+                    href={selectedImage}
+                    download="faceswap-image.jpg"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Download size={16} className="mr-2" />
+                    Download
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
