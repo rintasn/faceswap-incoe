@@ -12,7 +12,7 @@ interface FaceSwapData {
 const FaceSwapComponent = () => {
   const [images, setImages] = useState<FaceSwapData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const fetchFaceSwapData = async () => {
@@ -26,10 +26,35 @@ const FaceSwapComponent = () => {
       }
       
       const data = await response.json();
-      setImages(data);
-    } catch (err) {
+      
+      // Check if data is null or not an array
+      if (!data) {
+        console.warn('API returned null data');
+        setImages([]);
+        return;
+      }
+      
+      // Ensure we have an array, even if the API returned something else
+      if (!Array.isArray(data)) {
+        console.warn('API did not return an array, received:', typeof data);
+        setImages([]);
+        return;
+      }
+      
+      // Filter out any items that don't match our expected format
+      const validImages = data.filter((item: any) => 
+        item && 
+        typeof item === 'object' && 
+        'CreatedAt' in item && 
+        'ResultUrl' in item &&
+        typeof item.CreatedAt === 'string' &&
+        (item.ResultUrl === null || typeof item.ResultUrl === 'string')
+      );
+      
+      setImages(validImages);
+    } catch (err: any) {
       console.error('Error fetching face swap data:', err);
-      // setError(err.message);
+      setError(err.message || 'Failed to fetch data');
     } finally {
       setLoading(false);
     }
@@ -45,9 +70,16 @@ const FaceSwapComponent = () => {
 
   const downloadImage = (e: React.MouseEvent, imageData: FaceSwapData, index: number) => {
     e.stopPropagation(); // Prevent opening the popup when clicking download
+    
+    // Check if ResultUrl exists and is a valid string
+    if (!imageData.ResultUrl) {
+      console.error('Cannot download: ResultUrl is null or empty');
+      return;
+    }
+    
     const link = document.createElement('a');
     link.href = imageData.ResultUrl;
-    link.download = `faceswap-${imageData.CreatedAt.split('T')[0]}-${index}.jpg`;
+    link.download = `faceswap-${imageData.CreatedAt?.split('T')[0] || 'image'}-${index}.jpg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -55,13 +87,28 @@ const FaceSwapComponent = () => {
 
   // Function to adjust time by subtracting 7 hours
   const adjustTimeZone = (dateString: string): string => {
-    const date = new Date(dateString);
-    date.setHours(date.getHours() - 7);
-    return date.toLocaleString();
+    if (!dateString) return 'Unknown date';
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Check for invalid date
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      
+      date.setHours(date.getHours() - 7);
+      return date.toLocaleString();
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Date error';
+    }
   };
 
   // Handle click on image to show popup
   const handleImageClick = (imageUrl: string) => {
+    if (!imageUrl) return;
+    
     setSelectedImage(imageUrl);
     // Prevent scrolling when popup is open
     document.body.style.overflow = 'hidden';
@@ -145,7 +192,7 @@ const FaceSwapComponent = () => {
                 className="bg-gray-800 rounded-lg overflow-hidden shadow-lg"
               >
                 <div 
-                  className="relative pt-[100%] bg-gray-700 cursor-pointer"
+                  className={`relative pt-[100%] bg-gray-700 ${image.ResultUrl ? 'cursor-pointer' : ''}`}
                   onClick={() => image.ResultUrl && handleImageClick(image.ResultUrl)}
                 >
                   {image.ResultUrl ? (
@@ -169,16 +216,18 @@ const FaceSwapComponent = () => {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-gray-400 text-sm">
-                        {adjustTimeZone(image.CreatedAt)}
+                        {image.CreatedAt ? adjustTimeZone(image.CreatedAt) : 'Unknown date'}
                       </p>
                     </div>
-                    <button
-                      onClick={(e) => downloadImage(e, image, index)}
-                      className="bg-gray-700 hover:bg-gray-600 p-2 rounded-full transition-colors"
-                      title="Download Image"
-                    >
-                      <Download size={16} />
-                    </button>
+                    {image.ResultUrl && (
+                      <button
+                        onClick={(e) => downloadImage(e, image, index)}
+                        className="bg-gray-700 hover:bg-gray-600 p-2 rounded-full transition-colors"
+                        title="Download Image"
+                      >
+                        <Download size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -209,6 +258,11 @@ const FaceSwapComponent = () => {
                 src={selectedImage} 
                 alt="Enlarged Face Swap"
                 className="max-h-[80vh] max-w-full mx-auto object-contain"
+                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                  const imgElement = e.currentTarget as HTMLImageElement;
+                  imgElement.onerror = null;
+                  imgElement.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23333333'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='12' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle'%3EImage Load Error%3C/text%3E%3C/svg%3E";
+                }}
               />
               
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
